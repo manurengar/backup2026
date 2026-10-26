@@ -1,0 +1,126 @@
+CLASS zglxx_cla_etl_mrg_sql DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES if_amdp_marker_hdb .
+    INTERFACES if_oo_adt_classrun.
+
+  PRIVATE SECTION.
+    METHODS split_sqlscript_string_lib.
+    METHODS format_sqlscript_string_lib.
+    METHODS summary_sqlscript_string_lib.
+ENDCLASS.
+
+
+
+CLASS zglxx_cla_etl_mrg_sql IMPLEMENTATION.
+
+  METHOD summary_sqlscript_string_lib BY DATABASE PROCEDURE
+  FOR HDB LANGUAGE SQLSCRIPT
+  USING pa0000.
+
+    -- The function table_summary returns a CSV string and for each row, it is break using UNIX line feed
+    using "PUBLIC"."SQLSCRIPT_STRING" as lib;
+    declare lv_string nvarchar( 5000 );
+
+    dummy_select
+    =
+    select * from pa0000 limit 30;
+
+    lv_string = lib:table_summary( :dummy_select, 10 );
+  endmethod.
+
+  METHOD format_sqlscript_string_lib BY DATABASE PROCEDURE
+  FOR HDB LANGUAGE SQLSCRIPT.
+
+    -- Formatting functions follows python string formatting rules
+    -- **This function cannot be used on the field declaration of a select clause
+    using "PUBLIC"."SQLSCRIPT_STRING" as lib;
+
+    declare formatted_string nvarchar( 50 );
+    declare formatted_table table ( result nvarchar( 5000 ) );
+    declare arr nvarchar( 200 ) array;
+
+
+   tt = select 'Sutherland' as lname, 'Jhon'   as fname, to_double( 29.8 ) as age from dummy
+     union all
+     select 'Stark'      as lname, 'Edward' as fname, to_double( 46.1 ) as age from dummy;
+
+    formatted_string = lib:format( '{1}, {0} is {2:.2f} years old', 'Miller', 'Peter', 21.3 );
+
+    -- However this function FORMAT_TO_TABLE can be used instead to save results on a table
+    -- This table contains just a column named 'result'
+    formatted_table = lib:format_to_table( 'Complete name: {fname}, {lname}. AGE: {age:.2f}', :tt );
+
+    -- Also there is a variant for creating arrays
+    arr = lib:format_to_array( 'Complete name: {fname}, {lname}. AGE: {age}', :tt );
+  endmethod.
+
+  METHOD split_sqlscript_string_lib BY DATABASE PROCEDURE
+  FOR HDB LANGUAGE SQLSCRIPT.
+
+    using "PUBLIC"."SQLSCRIPT_STRING" as "LIB";
+
+    -- SPLITTING: SPLIT and SPLIT_REGEXPR
+    -- If the number of sections in  the tuple is too much or too few, it dumps
+    DECLARE a1 nvarchar( 20 );
+    DECLARE a2 nvarchar( 20 );
+    DECLARE a3 nvarchar( 20 );
+
+    DECLARE arr nvarchar( 20 ) ARRAY;
+
+
+    ( a1, a2, a3 ) = "LIB":SPLIT( 'ABC-DEF-GHI', '-' );
+
+    dummy_select
+    =
+    select a1, a2, a3 from dummy;
+
+    ( a1, a2, a3 ) = "LIB":SPLIT( 'ABC-DEF-GHI-JKF-LMN', '-', 2 ); -- Limited to 3 so it also works fine
+
+    dummy_select
+    =
+    select a1, a2, a3 from dummy;
+
+    -- When using the SPLIT_REGEXPR the regexp expression is used as separator and thus removed from the decomposition
+
+    ( a1, a2 ) = "LIB":SPLIT_REGEXPR( 'ABC-DEF', '\w-\w' );
+
+    dummy_select1
+    =
+    select a1, a2 from dummy;
+
+
+    -- If instead of decomposing, we want to create a table, with a row for each regexp occurrence or delimitator found,
+    -- we can use SPLIT( _REGEXPR )_TO_TABLE
+
+    dummy_select2
+    =
+    select *
+    from "LIB":SPLIT_TO_TABLE( 'ABC-DEF-GHI-JKL-MNO', '-' );
+
+    -- or just using regexpr
+
+    dummy_select3
+    =
+    select *
+    from "LIB":SPLIT_REGEXPR_TO_TABLE( 'ABC-DEF-GHI-JKL-MNO', '\w-\w' );
+
+
+    -- Also we can apply the splitting to create arrays
+    arr = "LIB":SPLIT_REGEXPR_TO_ARRAY( 'ABC-DEF-GHI-JKL-MNO', '\w-\w' );
+
+    -- Then convert the array into table
+    dummy_select4 = unnest ( :arr ) as ( result );
+  ENDMETHOD.
+
+  METHOD if_oo_adt_classrun~main.
+    me->split_sqlscript_string_lib( ).
+    me->format_sqlscript_string_lib( ).
+    me->summary_sqlscript_string_lib( ).
+  ENDMETHOD.
+
+ENDCLASS.
